@@ -15,17 +15,39 @@ namespace ScanerUI
     {
         private string folderPath;
 
-        private Directory directory;
+        private string destinationFolderPath;
 
-        private SyncronizationEvents syncEvents;
+        private Queue<Item> items;
+
+        private DirectoryTreeBuilder treeBuilder;
+
+        private DirectorySerializer directorySerializer;
 
         private Thread scanThread;
+
+        private Thread buildThread;
+
+        private Thread seriazizeThread;
 
         public Form1()
         {
             InitializeComponent();
+            Init();
+        }
+
+        private void Init()
+        {
             progressBar1.Style = ProgressBarStyle.Marquee;
             progressBar1.Visible = false;
+            items = new Queue<Item>();
+            treeBuilder = new DirectoryTreeBuilder(items, treeView1);
+            directorySerializer = new DirectorySerializer(items);
+            buildThread = new Thread(treeBuilder.BuildDirectoryTree);
+            buildThread.IsBackground = true;
+            seriazizeThread = new Thread(directorySerializer.SaveToFile);
+            seriazizeThread.IsBackground = true;
+            buildThread.Start();
+            seriazizeThread.Start();
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -46,43 +68,28 @@ namespace ScanerUI
                 return;
             }
 
+            if (string.IsNullOrEmpty(destinationFolderPath))
+            {
+                MessageBox.Show("Select folder for result document first before scan");
+                return;
+            }
+
+            items.Clear();
             treeView1.Nodes.Clear();
             button1.Enabled = false;
             button2.Enabled = false;
+            button3.Enabled = false;
             progressBar1.Visible = true;
-
-            syncEvents = new SyncronizationEvents();
-            var items = new Queue<IItem>();
-            //var directoryScanner = new DirectoryScanner(directory, syncEvents);
-            var directoryScanner = new DirectoryScanner(this.folderPath, items, syncEvents);
+            var directoryScanner = new DirectoryScanner(this.folderPath, items);
             directoryScanner.ScanCompleted += DirectoryScanner_ScanCompleted;
-            //var directoryTreeBuilder = new DirectoryTreeBuilder(directory, syncEvents, treeView1);
-            var directoryTreeBuilder = new DirectoryTreeBuilder(items, syncEvents, treeView1);
-            //var directorySerializer = new DirectorySerializer(directory, syncEvents);
+            directorySerializer.SetPath(destinationFolderPath);
             scanThread = new Thread(directoryScanner.StartScan);
-            var buildThread = new Thread(directoryTreeBuilder.BuildDirectoryTree);
-            //var seriazizeThread = new Thread(directorySerializer.Serialize);
-            Console.WriteLine("Launching producer and consumer threads...");
+            scanThread.IsBackground = true;
             scanThread.Start();
-            buildThread.Start();
-            //seriazizeThread.Start();
-
-            /* for (int i = 0; i < 3; i++)
-             {
-                 Thread.Sleep(10);
-                 ShowCount(directory);
-             }*/
-
-            
-            //buildThread.Join();
-            //seriazizeThread.Join();
-            // BuildDirectoryTree();
         }
 
         private void DirectoryScanner_ScanCompleted(object sender, EventArgs e)
         {
-           // var serializer = new DirectorySerializer();
-           // serializer.WriteScores(directory);
             ShowButtons();
             scanThread.Join();
         }
@@ -95,8 +102,19 @@ namespace ScanerUI
                 {
                     button1.Enabled = true;
                     button2.Enabled = true;
+                    button3.Enabled = true;
                     progressBar1.Visible = false;
                 }));
+            }
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            DialogResult result = folderBrowserDialog1.ShowDialog();
+            if (result == DialogResult.OK)
+            {
+                destinationFolderPath = folderBrowserDialog1.SelectedPath;
+                destinationFolder.Text = destinationFolderPath;
             }
         }
     }

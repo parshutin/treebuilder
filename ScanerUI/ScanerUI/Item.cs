@@ -1,56 +1,45 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
+using System.Linq;
 using System.Security.AccessControl;
-using System.Security.Permissions;
 using System.Security.Principal;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace ScanerUI
 {
-    public class DirectoryFile : Item
+    public abstract class Item
     {
-        public DirectoryFile()
-        {
-        }
+        public string Path { get; set; }
 
-        public DirectoryFile(string path, string parentName, int range)
-        {
-            try
-            {
-                Path = path;
-                ParentName = parentName;
-                Range = range;
-                var fileInfo = new FileInfo(path);
-                Name = fileInfo.Name;
-                CreationTimeUtc = fileInfo.CreationTimeUtc;
-                LastWriteTimeUtc = fileInfo.LastWriteTimeUtc;
-                LastAccessTimeUtc = fileInfo.LastAccessTimeUtc;
-                Length = fileInfo.Length;
-                ParseAttributes(fileInfo.Attributes);
-                GetSystemRights(fileInfo);
-            }
-            catch (UnauthorizedAccessException e)
-            {
-                MessageBox.Show(e.Message);
-            }
-            catch (FileNotFoundException e)
-            {
-                MessageBox.Show(e.Message);
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.Message);
-            }
-        }
+        public string ParentName { get; set; }
 
-       /* private void GetSystemRights(FileInfo fileInfo)
+        public int Range { get; set; }
+
+        public bool IsInTree { get; set; }
+
+        public bool IsInFile { get; set; }
+
+        public string Name { get; set; }
+
+        public DateTime CreationTimeUtc { get; set; }
+
+        public DateTime LastWriteTimeUtc { get; set; }
+
+        public DateTime LastAccessTimeUtc { get; set; }
+
+        public string Attributes { get; set; }
+
+        public string AccessRules { get; set; }
+
+        public string Owner { get; set; }
+
+        protected void GetSystemRights(FileInfo fileInfo)
         {
             var rules = new HashSet<string>();
             var accessControl = fileInfo.GetAccessControl();
-            Owner = accessControl.GetOwner(typeof (NTAccount)).ToString();
+            Owner = accessControl.GetOwner(typeof(NTAccount)).ToString();
             var accesRules = accessControl.GetAccessRules(true, true, typeof(NTAccount));
             WindowsIdentity user = WindowsIdentity.GetCurrent();
             var principal = new WindowsPrincipal(user);
@@ -88,7 +77,7 @@ namespace ScanerUI
             AccessRules = string.Join(",", rules);
         }
 
-        private void ParseAttributes(FileAttributes attributes)
+        protected void ParseAttributes(FileAttributes attributes)
         {
             if ((attributes & FileAttributes.Hidden) == FileAttributes.Hidden)
             {
@@ -115,33 +104,19 @@ namespace ScanerUI
                 Attributes += FileAttributes.System + ",";
             }
 
-            Attributes = Attributes.Substring(0, Attributes.Length - 1);
+            if ((attributes & FileAttributes.Directory) == FileAttributes.Directory)
+            {
+                Attributes += FileAttributes.Directory + ",";
+            }
+
+            if (Attributes != null)
+            {
+                Attributes = Attributes.Substring(0, Attributes.Length - 1);
+            }
+            else
+            {
+                Attributes = "Unexpected attribute";
+            }
         }
-
-        public string Path { get; set; }
-
-        public string ParentName { get; set; }
-
-        public int Range { get; set; }
-
-        public bool IsInTree { get; set; }
-
-        public bool IsInFile { get; set; }
-
-        public string Name { get; set; }
-
-        public DateTime CreationTimeUtc { get; set; }
-
-        public DateTime LastWriteTimeUtc { get; set; }
-
-        public DateTime LastAccessTimeUtc { get; set; }
-
-        public string Attributes { get; set; }
-
-        public string AccessRules { get; set; }
-
-        public string Owner { get; set; }*/
-
-        public long Length { get; set; }
     }
 }

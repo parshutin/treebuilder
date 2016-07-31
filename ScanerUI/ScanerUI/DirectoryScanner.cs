@@ -1,102 +1,89 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
+using System.Windows.Forms;
 
 namespace ScanerUI
 {
     public class DirectoryScanner
     {
-        private Directory directory;
-
-        private SyncronizationEvents events;
-
         public event EventHandler ScanCompleted;
 
-        private Queue<IItem> directories;
+        private Queue<Item> directories;
 
         private string path;
 
-        public DirectoryScanner(string path, Queue<IItem> directories, SyncronizationEvents events)
+        public DirectoryScanner(string path, Queue<Item> directories)
         {
             this.path = path;
             this.directories = directories;
-            this.events = events;
-        }
-
-        public DirectoryScanner(Directory directory, SyncronizationEvents events)
-        {
-            this.directory = directory;
-            this.events = events;
         }
 
         public void StartScan()
         {
             lock (((ICollection)directories).SyncRoot)
             {
+                if (!System.IO.Directory.Exists(path))
+                {
+                    throw new ApplicationException("There is no such directory");
+                }
+
                 var root = new Directory(path, null, 0);
                 directories.Enqueue(root);
-                events.FolderScanned.Set();
+                Monitor.Pulse(((ICollection)directories).SyncRoot);
                 FillDirectoriesList(root);
             }
 
             if (ScanCompleted != null)
             {
                 ScanCompleted(this, EventArgs.Empty);
-            }
+            }            
         }
 
         private void FillDirectoriesList(Directory directory)
         {
-            var filesNames = System.IO.Directory.GetFiles(directory.Path);
-            var directoriesNames = System.IO.Directory.GetDirectories(directory.Path);
-            foreach (var directoryName in directoriesNames)
-            {
-                var subDirectory = new Directory(directoryName, directory.Path, directory.Range + 1);
-                directories.Enqueue(subDirectory);
-                events.FolderScanned.Set();
-                FillDirectoriesList(subDirectory);
-            }
-
-            foreach (var fileName in filesNames)
-            {
-                var file = new DirectoryFile(fileName, directory.Path, directory.Range + 1);
-                directories.Enqueue(file);
-                events.FolderScanned.Set();
-            }
-        }
-
-        /*public void StartScan()
-        {
-            FillDirectoriesList(directory);
-            if (ScanCompleted != null)
-            {
-                ScanCompleted(this, EventArgs.Empty);
-            }
-        }
-
-        private void FillDirectoriesList(Directory directory)
-        {
-            lock (directory.Locker)
+            try
             {
                 var filesNames = System.IO.Directory.GetFiles(directory.Path);
                 var directoriesNames = System.IO.Directory.GetDirectories(directory.Path);
                 foreach (var directoryName in directoriesNames)
                 {
-                    var subDirectory = new Directory(directoryName);
-                    directory.Directories.Add(subDirectory);
-                    Console.WriteLine("Added Directory");
-                    events.FolderScanned.Set();
+                    while (directories.Count >= 100)
+                    {
+                        Monitor.Wait(((ICollection) directories).SyncRoot);
+                    }
+
+                    var subDirectory = new Directory(directoryName, directory.Path, directory.Range + 1);
+                    directories.Enqueue(subDirectory);
+                    Monitor.Pulse(((ICollection) directories).SyncRoot);
                     FillDirectoriesList(subDirectory);
                 }
 
-
                 foreach (var fileName in filesNames)
                 {
-                    directory.DirectoryFiles.Add(new DirectoryFile(fileName, directory));
-                    Console.WriteLine("Added File");
-                    events.FolderScanned.Set();
+                    while (directories.Count >= 100)
+                    {
+                        Monitor.Wait(((ICollection) directories).SyncRoot);
+                    }
+
+                    var file = new DirectoryFile(fileName, directory.Path, directory.Range + 1);
+                    directories.Enqueue(file);
+                    Monitor.Pulse(((ICollection) directories).SyncRoot);
                 }
             }
-        }*/
+            catch (UnauthorizedAccessException e)
+            {
+                MessageBox.Show(e.Message);
+            }
+            catch (System.IO.DirectoryNotFoundException e)
+            {
+                MessageBox.Show(e.Message);
+            }
+            catch
+            {
+                MessageBox.Show("Some error occurred");
+            }
+        }
     }
 }

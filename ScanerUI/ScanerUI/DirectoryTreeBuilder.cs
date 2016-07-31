@@ -11,28 +11,46 @@ namespace ScanerUI
 {
     public class DirectoryTreeBuilder
     {
-        private SyncronizationEvents syncEvents;
-
         private TreeView treeView;
 
-        private Queue<IItem> items;
+        private Queue<Item> items;
 
-        public DirectoryTreeBuilder(Queue<IItem> directories, SyncronizationEvents events, TreeView treeView)
+        public DirectoryTreeBuilder(Queue<Item> directories, TreeView treeView)
         {
             this.items = directories;
-            this.syncEvents = events;
             this.treeView = treeView;
         }
 
         public void BuildDirectoryTree()
         {
-            while (WaitHandle.WaitAny(syncEvents.eventArray) != 1)
+            while (true)
             {
-                lock (((ICollection)items).SyncRoot)
+                try
                 {
-                    while (items.Count > 0)
+                    lock (((ICollection) items).SyncRoot)
                     {
-                        var item = items.Dequeue();
+                        while (items.Count == 0)
+                        {
+                            Monitor.Wait(((ICollection) items).SyncRoot);
+                        }
+
+
+                        var item = items.Peek();
+                        if (item.IsInFile)
+                        {
+                            items.Dequeue();
+                            Monitor.Pulse(((ICollection) items).SyncRoot);
+                        }
+                        else
+                        {
+                            if (item.IsInTree)
+                            {
+                                continue;
+                            }
+
+                            item.IsInTree = true;
+                        }
+
                         var node = new TreeNode(item.Path);
                         if (item.Range == 0)
                         {
@@ -48,10 +66,18 @@ namespace ScanerUI
                         }
                     }
                 }
+                catch (NullReferenceException e)
+                {
+                    MessageBox.Show(e.Message);
+                }
+                catch
+                {
+                    MessageBox.Show("Some error occurred");
+                }
             }
         }
 
-        private TreeNode FindParent(IItem item, TreeNode root)
+        private TreeNode FindParent(Item item, TreeNode root)
         {
             if (root.Level == item.Range - 1 && root.Text == item.ParentName)
             {
